@@ -28,7 +28,7 @@ public class MyChat {
         String password = scanner.nextLine();
         System.out.print("Cell number (e.g. +27838968976): ");
         String cellPhoneNumber = scanner.nextLine();
-
+     // Prompt the user to log in using the credentials they just registered
         Login registration = new Login();
         boolean registered = registration.registerUser(firstName, lastName, username, password, cellPhoneNumber);
 
