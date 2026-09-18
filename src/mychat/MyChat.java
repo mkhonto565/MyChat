@@ -22,7 +22,7 @@ public class MyChat {
         String firstName = scanner.nextLine();
         System.out.print("Last name: ");
         String lastName = scanner.nextLine();
-        System.out.print("Username (must contain '_' and be <= 5 characters): ");
+        System.out.print("Username (must contain '_' and be <= 6 characters): ");
         String username = scanner.nextLine();
         System.out.print("Password (8+ chars, capital letter, number, special char): ");
         String password = scanner.nextLine();
