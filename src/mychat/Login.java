@@ -74,7 +74,7 @@ public class Login {
         }
         return "Cell phone number incorrectly formatted or does not contain international code; please correct the number and try again.";
     }
-
+    // Validates and stores a new user's details if all fields meet the required format
     public boolean registerUser(String firstName, String lastName, String username, String password, String cellPhoneNumber) {
         this.firstName = firstName;
         this.lastName = lastName;
