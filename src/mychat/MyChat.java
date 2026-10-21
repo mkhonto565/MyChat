@@ -15,47 +15,165 @@ public class MyChat {
      * @param args the command line arguments
      */
     public static void main(String[] args) {
-          Scanner scanner = new Scanner(System.in);
-
-        System.out.println("=== Registration ===");
-        System.out.print("First name: ");
-        String firstName = scanner.nextLine();
-        System.out.print("Last name: ");
-        String lastName = scanner.nextLine();
-        System.out.print("Username (must contain '_' and be <= 6 characters): ");
-        String username = scanner.nextLine();
-        System.out.print("Password (8+ chars, capital letter, number, special char): ");
-        String password = scanner.nextLine();
-        System.out.print("Cell number (e.g. +27838968976): ");
-        String cellPhoneNumber = scanner.nextLine();
-     // Prompt the user to log in using the credentials they just registered
-        Login registration = new Login();
-        boolean registered = registration.registerUser(firstName, lastName, username, password, cellPhoneNumber);
-
-        System.out.println(registration.returnUsernameStatus());
-        System.out.println(registration.returnPasswordStatus());
-        System.out.println(registration.returnCellPhoneNumberStatus());
-
-        if (!registered) {
-            System.out.println("\nRegistration failed - fix the fields above and restart.");
-            return;
+        try (Scanner scanner = new Scanner(System.in)) {
+            System.out.println("=== Registration ===");
+            
+            System.out.print("First name: ");
+            String firstName = scanner.nextLine();
+            
+            System.out.print("Last name: ");
+            String lastName = scanner.nextLine();
+            
+            System.out.print("Username: ");
+            String username = scanner.nextLine();
+            
+            System.out.print("Password: ");
+            String password = scanner.nextLine();
+            
+            System.out.print("Cell number (e.g. +27838968976): ");
+            String cellNumber = scanner.nextLine();
+            
+            Login registration = new Login();
+            
+            boolean registered = registration.registerUser(
+                    firstName, lastName, username, password, cellNumber);
+            
+            System.out.println(registration.returnUsernameStatus());
+            System.out.println(registration.returnPasswordStatus());
+            System.out.println(registration.returnCellPhoneNumberStatus());
+            
+            if (!registered) {
+                System.out.println("Registration failed. Please try again.");
+                scanner.close();
+                return;
+            }
+            
+            System.out.println("\n=== Login ===");
+            
+            System.out.print("Username: ");
+            String loginUsername = scanner.nextLine();
+            
+            System.out.print("Password: ");
+            String loginPassword = scanner.nextLine();
+            
+            Login login = new Login();
+            login.setUsername(loginUsername);
+            login.setPassword(loginPassword);
+            
+            System.out.println(login.returnLoginStatus());
+            
+            if (!login.loginUser()) {
+                scanner.close();
+                return;
+            }
+            
+            System.out.println("\nWelcome to QuickChat.");
+            
+            boolean running = true;
+            
+            while (running) {
+                
+                System.out.println("\n1. Send Messages");
+                System.out.println("2. Show recently sent messages");
+                System.out.println("3. Quit");
+                System.out.print("Choose an option: ");
+                
+                String choice = scanner.nextLine();
+                
+                switch (choice) {
+                    
+                    case "1" -> {
+                        System.out.print("How many messages would you like to enter? ");
+                        
+                        int numberOfMessages;
+                        
+                        try {
+                            numberOfMessages =
+                                    Integer.parseInt(scanner.nextLine());
+                            
+                            if (numberOfMessages <= 0) {
+                                System.out.println(
+                                        "Please enter a number greater than zero.");
+                                break;
+                            }
+                            
+                        } catch (NumberFormatException e) {
+                            System.out.println("Please enter a valid number.");
+                            break;
+                        }
+                        
+                        for (int i = 0; i < numberOfMessages; i++) {
+                            
+                            System.out.println("\nMessage " + (i + 1));
+                            
+                            System.out.print("Enter recipient number (+27...): ");
+                            String recipient = scanner.nextLine();
+                            
+                            System.out.print("Enter your message: ");
+                            String messageText = scanner.nextLine();
+                            
+                            Messages messages = new Messages(recipient, messageText);
+                            
+                            System.out.println("Messages ID: "
+                                    + messages.getMessagesID());
+                            
+                            if (!messages.checkRecipientCell()) {
+                                System.out.println(
+                                        "Invalid recipient cellphone number.");
+                                i--;
+                                continue;
+                            }
+                            
+                            if (messages.checkMessageLength()) {
+                            } else {
+                                System.out.println(
+                                        "Message must contain 1 to 250 characters.");
+                                i--;
+                                continue;
+                            }
+                            
+                            System.out.println("\n1. Send Message");
+                            System.out.println("2. Disregard Message");
+                            System.out.println("3. Store Message");
+                            System.out.print("Choose an option: ");
+                            
+                            String messageChoice = scanner.nextLine();
+                            
+                            if (messageChoice.equals("1")
+                                    || messageChoice.equals("2")
+                                    || messageChoice.equals("3")) {
+                                
+                                int option = Integer.parseInt(messageChoice);
+                                
+                                System.out.println(messages.sentMessage(option));
+                                
+                                if (option == 1) {
+                                    System.out.println("Message Hash: "
+                                            + messages.getMessageHash());
+                                }
+                                
+                            } else {
+                                System.out.println("Invalid message option.");
+                                i--;
+                            }
+                        }
+                        
+                        System.out.println("\nTotal messages sent: "
+                                + Messages.returnTotalMessages());
+                    }
+                        
+                    case "2" -> System.out.println(
+                                "Coming Soon.");
+                        
+                    case "3" -> {
+                        running = false;
+                        System.out.println("Thank you for using QuickChat.");
+                    }
+                        
+                    default -> System.out.println(
+                                "Invalid option. Please select 1, 2 or 3.");
+                }
+            }
         }
-
-        System.out.println("\n=== Login ===");
-        System.out.print("Username: ");
-        String loginUsername = scanner.nextLine();
-        System.out.print("Password: ");
-        String loginPassword = scanner.nextLine();
-
-        Login loginAttempt = new Login();
-        loginAttempt.setUsername(loginUsername);
-        loginAttempt.setPassword(loginPassword);
-
-        System.out.println(loginAttempt.returnLoginStatus());
     }
     }
-       
-
-
-
-      
