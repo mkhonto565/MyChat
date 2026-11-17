@@ -3,11 +3,10 @@
  * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
  */
 package mychat;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Random;
+import java.io.*;
+import java.nio.file.*;
+import java.util.*;
+import java.util.regex.*;
 
 /**
  *
@@ -15,44 +14,51 @@ import java.util.Random;
  */
 public class Messages {
      private String messageID;
+    private String sender;
     private String recipient;
     private String messageText;
     private String messageHash;
     private String status;
 
     private static int totalMessages = 0;
-    private static final List<Messages> sentMessages = new ArrayList<>();
-    private static final List<Messages> storedMessages = new ArrayList<>();
-    private static final List<Messages> disregardedMessages = new ArrayList<>();
-    private static final Random random = new Random();
+
+    private static final ArrayList<Messages> sentMessages = new ArrayList<>();
+    private static final ArrayList<Messages> storedMessages = new ArrayList<>();
+    private static final ArrayList<Messages> disregardedMessages = new ArrayList<>();
+
+    private static final String FILE_NAME = "messages.json";
 
     public Messages() {
     }
 
     public Messages(String recipient, String messageText) {
+        this("Developer", recipient, messageText);
+    }
+
+    public Messages(String sender, String recipient, String messageText) {
         this.messageID = generateMessageID();
+        this.sender = sender;
         this.recipient = recipient;
         this.messageText = messageText;
         this.status = "Pending";
     }
 
     private String generateMessageID() {
-        return String.format("%010d", Math.abs(random.nextLong()) % 10_000_000_000L);
+        return String.format("%010d",
+                new Random().nextInt(1_000_000_000));
     }
 
     public boolean checkMessageID() {
-        return messageID != null
-                && messageID.matches("\\d{1,10}");
+        return messageID != null && messageID.matches("\\d{1,10}");
     }
 
     public boolean checkRecipientCell() {
-        return recipient != null
-                && recipient.matches("\\+27\\d{9}");
+        return recipient != null && recipient.matches("\\+27\\d{9}");
     }
 
     public boolean checkMessageLength() {
         return messageText != null
-                && messageText.length() > 0
+                && !messageText.trim().isEmpty()
                 && messageText.length() <= 250;
     }
 
@@ -66,31 +72,30 @@ public class Messages {
         String firstWord = words[0];
         String lastWord = words[words.length - 1];
 
-        String firstTwoDigits = messageID.substring(0, 2);
-
-        return (firstTwoDigits + ":" + totalMessages + ":"
+        return (messageID.substring(0, 2) + ":"
+                + (totalMessages + 1) + ":"
                 + firstWord + lastWord).toUpperCase();
     }
 
     public String sentMessage(int option) {
+
+        if (!checkMessageID()) {
+            return "Invalid message ID.";
+        }
+
+        if (!checkRecipientCell()) {
+            return "Invalid recipient cellphone number.";
+        }
+
+        if (!checkMessageLength()) {
+            return "Message must contain between 1 and 250 characters.";
+        }
+
         if (option == 1) {
-            if (!checkMessageID()) {
-                return "Invalid message ID.";
-            }
-
-            if (!checkRecipientCell()) {
-                return "Invalid recipient cellphone number.";
-            }
-
-            if (!checkMessageLength()) {
-                return "Message must contain between 1 and 250 characters.";
-            }
-
             messageHash = createMessageHash();
             status = "Sent";
             sentMessages.add(this);
             totalMessages++;
-
             return "Message successfully sent.";
         }
 
@@ -101,34 +106,41 @@ public class Messages {
         }
 
         if (option == 3) {
+            messageHash = createMessageHash();
             status = "Stored";
-            storedMessages.add(this);
+
+            if (!storedMessages.contains(this)) {
+                storedMessages.add(this);
+            }
 
             try {
                 storeMessage();
                 return "Message successfully stored.";
             } catch (IOException e) {
-                return "Message could not be stored: " + e.getMessage();
+                storedMessages.remove(this);
+                return "Error storing message: " + e.getMessage();
             }
         }
 
         return "Invalid option.";
     }
 
+    // Save a stored message as a JSON object, one object per line.
     public void storeMessage() throws IOException {
-        try (FileWriter writer = new FileWriter("messages.json", true)) {
-            String json = String.format(
-                    "{\"messageID\":\"%s\",\"recipient\":\"%s\","
-                    + "\"messageText\":\"%s\",\"messageHash\":\"%s\","
-                    + "\"status\":\"%s\"}%n",
-                    escapeJson(messageID),
-                    escapeJson(recipient),
-                    escapeJson(messageText),
-                    escapeJson(messageHash == null ? "" : messageHash),
-                    escapeJson(status));
 
-            writer.write(json);
-        }
+        String json = "{"
+                + "\"messageID\":\"" + escapeJson(messageID) + "\","
+                + "\"sender\":\"" + escapeJson(sender) + "\","
+                + "\"recipient\":\"" + escapeJson(recipient) + "\","
+                + "\"messageText\":\"" + escapeJson(messageText) + "\","
+                + "\"messageHash\":\"" + escapeJson(messageHash) + "\","
+                + "\"status\":\"" + escapeJson(status) + "\""
+                + "}";
+
+        Files.write(Paths.get(FILE_NAME),
+                (json + System.lineSeparator()).getBytes("UTF-8"),
+                StandardOpenOption.CREATE,
+                StandardOpenOption.APPEND);
     }
 
     private String escapeJson(String value) {
@@ -143,6 +155,64 @@ public class Messages {
                 .replace("\t", "\\t");
     }
 
+    private static String unescapeJson(String value) {
+        return value.replace("\\\"", "\"")
+                .replace("\\n", "\n")
+                .replace("\\r", "\r")
+                .replace("\\t", "\t")
+                .replace("\\\\", "\\");
+    }
+
+    private static String readJsonField(String json, String field) {
+        Pattern pattern = Pattern.compile(
+                "\"" + field + "\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"");
+        Matcher matcher = pattern.matcher(json);
+
+        if (matcher.find()) {
+            return unescapeJson(matcher.group(1));
+        }
+
+        return "";
+    }
+
+    // Load stored messages from the JSON file.
+    public static void loadStoredMessages() {
+
+        storedMessages.clear();
+
+        Path path = Paths.get(FILE_NAME);
+
+        if (!Files.exists(path)) {
+            return;
+        }
+
+        try {
+            List<String> lines = Files.readAllLines(path);
+
+            for (String line : lines) {
+                if (line.trim().isEmpty()) {
+                    continue;
+                }
+
+                Messages message = new Messages();
+
+                message.messageID = readJsonField(line, "messageID");
+                message.sender = readJsonField(line, "sender");
+                message.recipient = readJsonField(line, "recipient");
+                message.messageText = readJsonField(line, "messageText");
+                message.messageHash = readJsonField(line, "messageHash");
+                message.status = readJsonField(line, "status");
+
+                storedMessages.add(message);
+            }
+
+        } catch (IOException e) {
+            System.out.println("Could not load stored messages: "
+                    + e.getMessage());
+        }
+    }
+
+    // Display all sent messages.
     public static String printMessages() {
         StringBuilder output = new StringBuilder();
 
@@ -154,11 +224,146 @@ public class Messages {
             output.append("-----------------------------\n");
         }
 
-        if (output.length() == 0) {
-            return "No sent messages available.";
+        return output.length() == 0
+                ? "No sent messages available."
+                : output.toString();
+    }
+
+    // Display sender and recipient of stored messages.
+    public static void displayStoredSendersAndRecipients() {
+        loadStoredMessages();
+
+        if (storedMessages.isEmpty()) {
+            System.out.println("No stored messages available.");
+            return;
         }
 
-        return output.toString();
+        for (Messages message : storedMessages) {
+            System.out.println("Sender: " + message.sender);
+            System.out.println("Recipient: " + message.recipient);
+            System.out.println("-----------------------------");
+        }
+    }
+
+    // Find the longest stored message.
+    public static void displayLongestStoredMessage() {
+        loadStoredMessages();
+
+        if (storedMessages.isEmpty()) {
+            System.out.println("No stored messages available.");
+            return;
+        }
+
+        Messages longest = storedMessages.get(0);
+
+        for (Messages message : storedMessages) {
+            if (message.messageText.length()
+                    > longest.messageText.length()) {
+                longest = message;
+            }
+        }
+
+        System.out.println("Longest stored message:");
+        System.out.println(longest.messageText);
+        System.out.println("Length: " + longest.messageText.length());
+    }
+
+    // Search for a message using its ID.
+    public static void searchMessageByID(String id) {
+        loadStoredMessages();
+
+        for (Messages message : storedMessages) {
+            if (message.messageID.equals(id)) {
+                System.out.println("Message ID: " + message.messageID);
+                System.out.println("Recipient: " + message.recipient);
+                System.out.println("Message: " + message.messageText);
+                return;
+            }
+        }
+
+        System.out.println("Message ID not found.");
+    }
+
+    // Search for all messages sent to a particular recipient.
+    public static void searchMessagesByRecipient(String recipient) {
+        loadStoredMessages();
+
+        boolean found = false;
+
+        for (Messages message : storedMessages) {
+            if (message.recipient.equals(recipient)) {
+                System.out.println("Message: " + message.messageText);
+                System.out.println("Message ID: " + message.messageID);
+                found = true;
+            }
+        }
+
+        if (!found) {
+            System.out.println("No messages found for this recipient.");
+        }
+    }
+
+    // Delete a stored message using its message hash.
+    public static void deleteMessageByHash(String hash) {
+        loadStoredMessages();
+
+        boolean removed = storedMessages.removeIf(
+                message -> message.messageHash.equals(hash));
+
+        if (removed) {
+            saveAllStoredMessages();
+            System.out.println("Message successfully deleted.");
+        } else {
+            System.out.println("Message hash not found.");
+        }
+    }
+
+    // Rewrite the JSON file after a deletion.
+    private static void saveAllStoredMessages() {
+
+        try (BufferedWriter writer = new BufferedWriter(
+                new FileWriter(FILE_NAME, false))) {
+
+            for (Messages message : storedMessages) {
+
+                String json = "{"
+                        + "\"messageID\":\"" + message.escapeJson(message.messageID) + "\","
+                        + "\"sender\":\"" + message.escapeJson(message.sender) + "\","
+                        + "\"recipient\":\"" + message.escapeJson(message.recipient) + "\","
+                        + "\"messageText\":\"" + message.escapeJson(message.messageText) + "\","
+                        + "\"messageHash\":\"" + message.escapeJson(message.messageHash) + "\","
+                        + "\"status\":\"" + message.escapeJson(message.status) + "\""
+                        + "}";
+
+                writer.write(json);
+                writer.newLine();
+            }
+
+        } catch (IOException e) {
+            System.out.println("Could not update JSON file: " + e.getMessage());
+        }
+    }
+
+    // Display a full report of stored messages.
+    public static void displayStoredMessageReport() {
+        loadStoredMessages();
+
+        if (storedMessages.isEmpty()) {
+            System.out.println("No stored messages available.");
+            return;
+        }
+
+        System.out.println("========== STORED MESSAGE REPORT ==========");
+
+        for (Messages message : storedMessages) {
+            System.out.println("Message ID: " + message.messageID);
+            System.out.println("Sender: " + message.sender);
+            System.out.println("Recipient: " + message.recipient);
+            System.out.println("Message: " + message.messageText);
+            System.out.println("Message Hash: " + message.messageHash);
+            System.out.println("Status: " + message.status);
+            System.out.println("-------------------------------------------");
+        }
     }
 
     public static int returnTotalMessages() {
@@ -167,6 +372,15 @@ public class Messages {
 
     public String getMessageID() {
         return messageID;
+    }
+
+    // Keep this method because your existing MyChat.java calls it.
+    public String getMessagesID() {
+        return messageID;
+    }
+
+    public String getSender() {
+        return sender;
     }
 
     public String getRecipient() {
@@ -190,6 +404,7 @@ public class Messages {
     }
 
     public static List<Messages> getStoredMessages() {
+        loadStoredMessages();
         return new ArrayList<>(storedMessages);
     }
 
@@ -197,7 +412,5 @@ public class Messages {
         return new ArrayList<>(disregardedMessages);
     }   
 
-    String getMessagesID() {
-        throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
-    }
 }
+ 
